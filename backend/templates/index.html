@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Baby Tracker</h1>
+
+  <div class="grid">
+    <a class="button button-primary button-tile" href="#" hx-get="/modal/feed" hx-target="#modals" hx-swap="innerHTML">🍼</a>
+    <a class="button button-poop button-tile" href="#" hx-get="/modal/poop" hx-target="#modals" hx-swap="innerHTML">💩</a>
+    <a class="button button-pee button-tile" href="#" hx-get="/modal/pee" hx-target="#modals" hx-swap="innerHTML">💧</a>
+    <a class="button button-tile" href="/pumping" style="background:#f3f4f6;">🐄</a>
+    <a class="button button-secondary button-tile" href="/status">📈</a>
+    <a class="button button-tile" href="/manage">⚙️</a>
+  </div>
+
+  <div id="modals" class="spacer"></div>
+{% endblock %}
+
+

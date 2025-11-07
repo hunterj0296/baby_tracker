@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  baby-tracker:
+    build: .
+    container_name: baby-tracker
+    ports:
+      - "8080:8080"
+    environment:
+      - DAY_ZERO=2025-10-28
+      - DATA_PATH=/data/baby_tracking.db
+      - RATE_LIMIT=60/minute
+      - TZ=UTC
+    volumes:
+      - ./data:/data
+      - ./backend:/app/backend   # bind-mount source so edits are visible inside the container
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
+    restart: unless-stopped
+
+

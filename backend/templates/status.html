@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+  <a href="/" class="button" style="display:inline-block; width:auto; padding:8px 12px; font-size:14px; margin-bottom:8px;">← Home</a>
+  <h1>Last 24 hours</h1>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin-top:0;">🍼 Feeds</h3>
+    <p>Count: <strong>{{ feeds.count }}</strong></p>
+    <p>Total: <strong>{{ '%.2f' % feeds.total_oz }} oz</strong> (<span class="muted">{{ feeds.total_ml|int }} mL</span>)</p>
+    <p>Average per feed: 
+      {% if feeds.count > 0 %}
+        <strong class="{{ feeds.color }}">{{ '%.2f' % feeds.avg_oz }} oz</strong>
+      {% else %}
+        <span class="muted">N/A</span>
+      {% endif %}
+    </p>
+    <p>Target range (24h): 
+      {% if targets.oz is none %}
+        <span class="muted">N/A before Day 1</span>
+      {% else %}
+        <strong>{{ '%.2f' % targets.oz.low }}–{{ '%.2f' % targets.oz.high }} oz</strong>
+        <span class="muted">({{ targets.ml.low|int }}–{{ targets.ml.high|int }} mL)</span>
+      {% endif %}
+    </p>
+    {% if targets.oz is not none and feeds.count > 0 %}
+      {% set denom = (targets.oz.high - targets.oz.low) %}
+      {% set marker = 0 %}
+      {% if denom > 0 %}
+        {% set marker = ((feeds.total_oz - targets.oz.low) / denom * 100) %}
+      {% endif %}
+      {% if marker < 0 %}{% set marker = 0 %}{% endif %}
+      {% if marker > 100 %}{% set marker = 100 %}{% endif %}
+      <div class="mini-range {{ feeds.color }}" style="margin-top:8px;">
+        <div class="mini-range__band"></div>
+        <div class="mini-range__marker" style="left: {{ '%.1f' % marker }}%;"></div>
+      </div>
+      <div class="hint">Total vs target band</div>
+    {% endif %}
+    <p class="muted">Age: {{ '%.1f' % age_days }} days</p>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h3 style="margin-top:0;">💧 Pees</h3>
+    <p>Count: <strong class="{{ pees.color }}">{{ pees.count }}</strong> <span class="muted">(target ≥ 6)</span></p>
+    <div class="dots {{ pees.color }}" style="margin-top:8px;">
+      {% for i in range(6) %}
+        <span class="dot {{ 'dot--on' if pees.count > i else '' }}"></span>
+      {% endfor %}
+    </div>
+    <div class="hint">Goal 6 in 24h</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;">💩 Poops</h3>
+    <p>Time since last: 
+      {% if poops.since_last_hours is none %}
+        <span class="muted">No poops recorded</span>
+      {% else %}
+        <strong class="{{ poops.color }}">{{ '%.1f' % poops.since_last_hours }} hours</strong>
+      {% endif %}
+      <span class="muted">(yellow > 24h, red > 48h)</span>
+    </p>
+    {% if poops.since_last_hours is not none %}
+      {% set p = (poops.since_last_hours / 48.0 * 100) %}
+      {% if p < 0 %}{% set p = 0 %}{% endif %}
+      {% if p > 100 %}{% set p = 100 %}{% endif %}
+      <div class="mini-range {{ poops.color }}" style="margin-top:8px;">
+        <div class="mini-range__marker" style="left: {{ '%.1f' % p }}%;"></div>
+      </div>
+      <div class="hint">0h -> 48h+</div>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-top:12px;">
+    <h3 style="margin-top:0;">🐄 Pumping</h3>
+
+    <p>Total time: <strong>{{ pumping.hours }}h {{ pumping.minutes }}m</strong> <span class="muted">({{ pumping.total_seconds }}s)</span></p>
+    <p>Total collected: <strong>{{ '%.2f' % pumping.total_oz }} oz</strong> <span class="muted">({{ pumping.total_ml|int }} mL)</span></p>
+  </div>
+
+{% endblock %}
+
+
+

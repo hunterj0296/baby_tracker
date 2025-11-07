@@ -1,0 +1,97 @@
+<div class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="card">
+      <h2 style="margin-top:0;margin-bottom:12px;font-size:18px;">Log feed</h2>
+      <form hx-post="/api/feeds" hx-target="#modals" hx-swap="innerHTML" onsubmit="prepareFeedSubmit(event)">
+        <div class="row row--time">
+          <div>
+            <label for="dt">Time</label>
+            <input id="dt" name="timestamp_local" type="datetime-local" step="60" required />
+          </div>
+          <div>
+            <label for="unit">Unit</label>
+            <select id="unit" onchange="toggleUnit(this.value)">
+              <option value="oz" selected>oz</option>
+              <option value="ml">mL</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="amount_oz">Amount (oz)</label>
+            <input id="amount_oz" name="amount_oz" type="number" inputmode="decimal" step="0.01" min="0" placeholder="e.g. 3.25" />
+          </div>
+          <div>
+            <label for="amount_ml">Amount (mL)</label>
+            <input id="amount_ml" name="amount_ml" type="number" inputmode="decimal" step="1" min="0" placeholder="e.g. 60" />
+          </div>
+        </div>
+
+        <input type="hidden" id="timestamp_utc" name="timestamp_utc" />
+
+        <div class="spacer"></div>
+        <div class="row">
+          <button class="button button-primary" type="submit">Save</button>
+          <a class="button" href="#" onclick="closeModal(event)">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function init() {
+    const dt = document.getElementById('dt');
+    const now = new Date();
+    dt.value = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    const amtOz = document.getElementById('amount_oz');
+    const amtMl = document.getElementById('amount_ml');
+    // Default view respects current select value and hides the other input
+    const unitSel = document.getElementById('unit');
+    toggleUnit(unitSel.value);
+    amtOz.addEventListener('input', () => {
+      const v = parseFloat(amtOz.value);
+      if (!isNaN(v)) amtMl.value = Math.round(v * 29.5735);
+    });
+    amtMl.addEventListener('input', () => {
+      const v = parseFloat(amtMl.value);
+      if (!isNaN(v)) amtOz.value = (v / 29.5735).toFixed(2);
+    });
+  })();
+
+  function toggleUnit(unit){
+    const oz = document.getElementById('amount_oz');
+    const ml = document.getElementById('amount_ml');
+    const ozWrap = oz.parentElement;
+    const mlWrap = ml.parentElement;
+    if (unit === 'oz') {
+      // Show oz, hide ml; only submit oz
+      ozWrap.style.display = '';
+      mlWrap.style.display = 'none';
+      oz.disabled = false;
+      ml.disabled = true;
+      oz.required = true;
+      ml.required = false;
+    } else {
+      // Show ml, hide oz; only submit ml
+      ozWrap.style.display = 'none';
+      mlWrap.style.display = '';
+      oz.disabled = true;
+      ml.disabled = false;
+      oz.required = false;
+      ml.required = true;
+    }
+  }
+
+  function prepareFeedSubmit(e){
+    const dt = document.getElementById('dt').value;
+    if(!dt){ e.preventDefault(); return; }
+    const local = new Date(dt);
+    document.getElementById('timestamp_utc').value = local.toISOString();
+  }
+
+  function closeModal(e){ e.preventDefault(); document.getElementById('modals').innerHTML = ''; }
+</script>
+
+

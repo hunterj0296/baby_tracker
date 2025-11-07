@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block content %}
+  <a href="/" class="button" style="display:inline-block; width:auto; padding:8px 12px; font-size:14px; margin-bottom:8px;">← Home</a>
+  <h1>Pumping</h1>
+
+  <form id="pumping-form" action="/api/pumping_sessions" method="post">
+    <input type="hidden" name="timestamp_utc" id="timestamp_utc" value="{{ now_iso }}" />
+    <input type="hidden" name="duration_seconds" id="duration_seconds" value="0" />
+    <input type="hidden" name="extra_seconds" id="extra_seconds" value="0" />
+
+    <div class="card" style="margin-bottom:12px; text-align:center;">
+      <div id="timer" style="font-size:42px; font-weight:800; letter-spacing:1px;">15:00</div>
+      <div class="spacer"></div>
+      <button type="button" id="start-btn" class="button button-accent" style="width:auto; display:inline-block;">Start</button>
+      <button type="button" id="pause-btn" class="button" style="width:auto; display:inline-block; margin-left:8px;" disabled>Pause</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <h3 style="margin-top:0;">🫗 Milk Collected</h3>
+      <div class="row">
+        <div>
+          <label for="milk_amount_input">Amount</label>
+          <input id="milk_amount_input" type="number" step="0.1" min="0" placeholder="0.0" />
+        </div>
+        <div>
+          <label for="milk_unit_input">Unit</label>
+          <select id="milk_unit_input">
+            <option value="oz" selected>oz</option>
+            <option value="ml">mL</option>
+          </select>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button type="button" id="add-milk" class="button" style="width:auto; display:inline-block;">Add amount</button>
+      <div class="spacer"></div>
+      <div id="milk-list" class="muted">No amounts added yet.</div>
+    </div>
+
+    <div class="card">
+      <button type="submit" class="button button-primary">Save pumping session</button>
+    </div>
+  </form>
+
+  
+
+  <script>
+    (function() {
+      var targetSeconds = {{ target_seconds | int }}; // 900
+      var started = false;
+      var running = false;
+      var startEpochMs = 0;
+      var tickId = null;
+      var accumulatedSeconds = 0; // total seconds across runs when paused
+
+      var timerEl = document.getElementById('timer');
+      var startBtn = document.getElementById('start-btn');
+      var formEl = document.getElementById('pumping-form');
+      var tsInput = document.getElementById('timestamp_utc');
+      var durInput = document.getElementById('duration_seconds');
+      var extraInput = document.getElementById('extra_seconds');
+      var pauseBtn = document.getElementById('pause-btn');
+
+      function fmt(seconds) {
+        var s = Math.max(0, Math.floor(seconds));
+        var m = Math.floor(s / 60);
+        var r = s % 60;
+        return (m < 10 ? '' + m : '' + m) + ':' + (r < 10 ? '0' + r : '' + r);
+      }
+
+      function updateDisplay() {
+        var now = Date.now();
+        var live = running ? Math.floor((now - startEpochMs) / 1000) : 0;
+        var elapsed = accumulatedSeconds + live;
+        var over = 0;
+        if (elapsed <= targetSeconds) {
+          var remaining = targetSeconds - elapsed;
+          timerEl.classList.remove('status-green');
+          timerEl.textContent = fmt(remaining);
+        } else {
+          over = elapsed - targetSeconds;
+          timerEl.classList.add('status-green');
+          timerEl.textContent = '+' + fmt(over);
+        }
+      }
+
+      function startTimer() {
+        if (started) return;
+        started = true;
+        running = true;
+        startEpochMs = Date.now();
+        startBtn.disabled = true;
+        pauseBtn.disabled = false;
+        pauseBtn.textContent = 'Pause';
+        tsInput.value = new Date().toISOString();
+        tickId = window.setInterval(updateDisplay, 1000);
+        updateDisplay();
+      }
+
+      startBtn.addEventListener('click', startTimer);
+
+      function togglePause() {
+        if (!started) return;
+        if (running) {
+          // Pause
+          var now = Date.now();
+          accumulatedSeconds += Math.floor((now - startEpochMs) / 1000);
+          running = false;
+          if (tickId) { window.clearInterval(tickId); tickId = null; }
+          pauseBtn.textContent = 'Resume';
+        } else {
+          // Resume
+          running = true;
+          startEpochMs = Date.now();
+          pauseBtn.textContent = 'Pause';
+          tickId = window.setInterval(updateDisplay, 1000);
+          updateDisplay();
+        }
+      }
+
+      pauseBtn.addEventListener('click', togglePause);
+
+      formEl.addEventListener('submit', function(ev) {
+        // Compute final duration and overage
+        var now = Date.now();
+        var live = (started && running) ? Math.floor((now - startEpochMs) / 1000) : 0;
+        var elapsed = accumulatedSeconds + live;
+        var over = Math.max(0, elapsed - targetSeconds);
+        durInput.value = String(elapsed);
+        extraInput.value = String(over);
+        if (tickId) { window.clearInterval(tickId); tickId = null; }
+      });
+
+      // Milk entries handling
+      var addBtn = document.getElementById('add-milk');
+      var amountInput = document.getElementById('milk_amount_input');
+      var unitInput = document.getElementById('milk_unit_input');
+      var listEl = document.getElementById('milk-list');
+
+      function renderEmptyState() {
+        if (listEl.children.length === 0) {
+          listEl.textContent = 'No amounts added yet.';
+          listEl.classList.add('muted');
+        }
+      }
+
+      function addMilkEntry() {
+        var val = parseFloat(amountInput.value);
+        if (isNaN(val) || val <= 0) {
+          amountInput.focus();
+          return;
+        }
+        // Clear empty state
+        if (listEl.textContent === 'No amounts added yet.') {
+          listEl.textContent = '';
+          listEl.classList.remove('muted');
+        }
+        var unit = unitInput.value;
+        var row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.gap = '8px';
+        row.style.margin = '6px 0';
+
+        var label = document.createElement('div');
+        label.textContent = val.toFixed(1) + ' ' + unit;
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'button';
+        removeBtn.style.width = 'auto';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', function() {
+          listEl.removeChild(row);
+          renderEmptyState();
+        });
+
+        // Hidden inputs (repeatable names to form arrays)
+        var hiddenAmt = document.createElement('input');
+        hiddenAmt.type = 'hidden';
+        hiddenAmt.name = 'milk_amount';
+        hiddenAmt.value = String(val);
+
+        var hiddenUnit = document.createElement('input');
+        hiddenUnit.type = 'hidden';
+        hiddenUnit.name = 'milk_unit';
+        hiddenUnit.value = unit;
+
+        row.appendChild(label);
+        row.appendChild(removeBtn);
+        row.appendChild(hiddenAmt);
+        row.appendChild(hiddenUnit);
+        listEl.appendChild(row);
+
+        // reset input
+        amountInput.value = '';
+        amountInput.focus();
+      }
+
+      addBtn.addEventListener('click', addMilkEntry);
+      renderEmptyState();
+    })();
+  </script>
+{% endblock %}
+
+
+

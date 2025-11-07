@@ -1,0 +1,34 @@
+<div class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="card">
+      <h2 style="margin-top:0;margin-bottom:12px;font-size:18px;">Log pee</h2>
+      <form hx-post="/api/pees" hx-target="#modals" hx-swap="innerHTML" onsubmit="prepareSubmit(event)">
+        <label for="dt">Time</label>
+        <input id="dt" name="timestamp_local" type="datetime-local" step="60" required />
+        <input type="hidden" id="timestamp_utc" name="timestamp_utc" />
+        <div class="spacer"></div>
+        <div class="row">
+          <button class="button button-primary" type="submit">Save</button>
+          <a class="button" href="#" onclick="closeModal(event)">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function init() {
+    const dt = document.getElementById('dt');
+    const now = new Date();
+    dt.value = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  })();
+  function prepareSubmit(e){
+    const dt = document.getElementById('dt').value;
+    if(!dt){ e.preventDefault(); return; }
+    const local = new Date(dt);
+    document.getElementById('timestamp_utc').value = local.toISOString();
+  }
+  function closeModal(e){ e.preventDefault(); document.getElementById('modals').innerHTML = ''; }
+</script>
+
+

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Manage {{ kind_title }}</h1>
+
+  {% if rows and rows|length > 0 %}
+    <div class="card">
+      {% for row in rows %}
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom: 1px solid var(--border);">
+          <div style="flex:1; font-size:14px;">
+            {{ row.text }}
+          </div>
+          <form method="post" action="/manage/{{ kind }}/{{ row.id }}/delete" onsubmit="return confirm('Are you sure?');">
+            <button class="button button-warn" style="padding:8px 12px; font-size:14px;">Delete</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card"><p class="muted">No entries found.</p></div>
+  {% endif %}
+
+  <div class="spacer"></div>
+  <a class="button" href="/manage">← Back</a>
+{% endblock %}
+
+
+

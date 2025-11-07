@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+aiosqlite
+jinja2
+slowapi
+python-dateutil
+python-multipart
+pytz
+
+
