@@ -87,7 +87,11 @@
   function prepareFeedSubmit(e){
     const dt = document.getElementById('dt').value;
     if(!dt){ e.preventDefault(); return; }
-    const local = new Date(dt);
+    // Parse datetime-local value explicitly as local time
+    const [datePart, timePart] = dt.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    const local = new Date(year, month - 1, day, hour, minute);
     document.getElementById('timestamp_utc').value = local.toISOString();
   }
 

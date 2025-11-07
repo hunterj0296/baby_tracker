@@ -49,7 +49,6 @@ async def healthz() -> str:
 async def home(request: Request) -> HTMLResponse:
     context: Dict[str, Any] = {
         "request": request,
-        "now_iso": datetime.now(timezone.utc).isoformat(),
     }
     return templates.TemplateResponse("index.html", context)
 
@@ -84,30 +83,29 @@ async def manage_list(
         feed_rows = session.exec(select(Feed).order_by(Feed.timestamp_utc.desc())).all()
         for fr in feed_rows:
             ts = fr.timestamp_utc
-            # Normalize to UTC if tzinfo missing, then convert to local time for display
+            # Normalize to UTC if tzinfo missing
             if getattr(ts, "tzinfo", None) is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            local_ts = ts.astimezone()
-            text = f"{local_ts.strftime('%Y-%m-%d %H:%M')} — {fr.amount_oz:.1f} oz ({fr.amount_ml:.0f} ml)"
-            rows.append({"id": fr.id, "text": text})
+            # Send UTC ISO string - frontend will convert to local time
+            ts_iso = ts.isoformat()
+            text = f"{fr.amount_oz:.1f} oz ({fr.amount_ml:.0f} ml)"
+            rows.append({"id": fr.id, "text": text, "timestamp_utc": ts_iso})
     elif kind == "pee":
         pee_rows = session.exec(select(Pee).order_by(Pee.timestamp_utc.desc())).all()
         for pr in pee_rows:
             ts = pr.timestamp_utc
             if getattr(ts, "tzinfo", None) is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            local_ts = ts.astimezone()
-            text = f"{local_ts.strftime('%Y-%m-%d %H:%M')}"
-            rows.append({"id": pr.id, "text": text})
+            ts_iso = ts.isoformat()
+            rows.append({"id": pr.id, "text": "", "timestamp_utc": ts_iso})
     elif kind == "poop":
         poop_rows = session.exec(select(Poop).order_by(Poop.timestamp_utc.desc())).all()
         for pr in poop_rows:
             ts = pr.timestamp_utc
             if getattr(ts, "tzinfo", None) is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            local_ts = ts.astimezone()
-            text = f"{local_ts.strftime('%Y-%m-%d %H:%M')}"
-            rows.append({"id": pr.id, "text": text})
+            ts_iso = ts.isoformat()
+            rows.append({"id": pr.id, "text": "", "timestamp_utc": ts_iso})
     elif kind == "pumping":
         sessions = session.exec(
             select(PumpingSession).order_by(PumpingSession.timestamp_utc.desc())
@@ -126,12 +124,12 @@ async def manage_list(
             ts = ps.timestamp_utc
             if getattr(ts, "tzinfo", None) is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            local_ts = ts.astimezone()
+            ts_iso = ts.isoformat()
             mins = int(max(0, ps.duration_seconds) // 60)
             secs = int(max(0, ps.duration_seconds) % 60)
             total_oz, total_ml = totals_by_session.get(int(ps.id), (0.0, 0.0))  # type: ignore[arg-type]
-            text = f"{local_ts.strftime('%Y-%m-%d %H:%M')} — {mins}m {secs}s — {total_oz:.1f} oz ({total_ml:.0f} ml)"
-            rows.append({"id": ps.id, "text": text})
+            text = f"{mins}m {secs}s — {total_oz:.1f} oz ({total_ml:.0f} ml)"
+            rows.append({"id": ps.id, "text": text, "timestamp_utc": ts_iso})
     else:
         return HTMLResponse("<div class='card'><p>Not found.</p></div>", status_code=404)
 
@@ -142,6 +140,102 @@ async def manage_list(
         "rows": rows,
     }
     return templates.TemplateResponse("manage_list.html", context)
+
+
+@app.get("/manage/{kind}/{item_id}/edit", response_class=HTMLResponse)
+async def manage_edit(
+    request: Request,
+    kind: str,
+    item_id: int,
+    session: Session = Depends(get_session),
+) -> HTMLResponse:
+    kind = kind.strip().lower()
+    obj = None
+    
+    if kind == "feeding":
+        obj = session.get(Feed, item_id)
+    elif kind == "pee":
+        obj = session.get(Pee, item_id)
+    elif kind == "poop":
+        obj = session.get(Poop, item_id)
+    elif kind == "pumping":
+        obj = session.get(PumpingSession, item_id)
+    else:
+        return HTMLResponse("<div class='card'><p>Not found.</p></div>", status_code=404)
+    
+    if obj is None:
+        return HTMLResponse("<div class='card'><p>Entry not found.</p></div>", status_code=404)
+    
+    # Get the timestamp as UTC ISO string
+    ts = obj.timestamp_utc
+    if getattr(ts, "tzinfo", None) is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    timestamp_utc_iso = ts.isoformat()
+    
+    # Create display text based on kind (without timestamp - JS will add it)
+    if kind == "feeding":
+        entry_details = f"{obj.amount_oz:.1f} oz ({obj.amount_ml:.0f} ml)"
+    elif kind == "pumping":
+        mins = int(max(0, obj.duration_seconds) // 60)
+        secs = int(max(0, obj.duration_seconds) % 60)
+        # Get total milk for this session
+        milk_rows = session.exec(
+            select(PumpedMilk).where(PumpedMilk.session_id == item_id)
+        ).all()
+        total_oz = sum((row.amount_oz for row in milk_rows), 0.0)
+        total_ml = sum((row.amount_ml for row in milk_rows), 0.0)
+        entry_details = f"{mins}m {secs}s — {total_oz:.1f} oz ({total_ml:.0f} ml)"
+    else:
+        entry_details = ""
+    
+    context: Dict[str, Any] = {
+        "request": request,
+        "kind": kind,
+        "kind_title": _kind_title(kind),
+        "item_id": item_id,
+        "timestamp_utc_iso": timestamp_utc_iso,
+        "entry_details": entry_details,
+    }
+    return templates.TemplateResponse("edit_time.html", context)
+
+
+@app.post("/manage/{kind}/{item_id}/update")
+async def manage_update(
+    request: Request,
+    kind: str,
+    item_id: int,
+    timestamp_utc: str = Form(...),
+    session: Session = Depends(get_session),
+):
+    kind = kind.strip().lower()
+    
+    # Parse the UTC ISO timestamp from the form
+    try:
+        utc_dt = datetime.fromisoformat(timestamp_utc.replace("Z", "+00:00"))
+    except Exception:
+        return HTMLResponse("<div class='card'><p>Invalid time format.</p></div>", status_code=400)
+    
+    obj = None
+    if kind == "feeding":
+        obj = session.get(Feed, item_id)
+    elif kind == "pee":
+        obj = session.get(Pee, item_id)
+    elif kind == "poop":
+        obj = session.get(Poop, item_id)
+    elif kind == "pumping":
+        obj = session.get(PumpingSession, item_id)
+    else:
+        return HTMLResponse("<div class='card'><p>Not found.</p></div>", status_code=404)
+    
+    if obj is None:
+        return HTMLResponse("<div class='card'><p>Entry not found.</p></div>", status_code=404)
+    
+    # Update the timestamp
+    obj.timestamp_utc = utc_dt
+    session.add(obj)
+    session.commit()
+    
+    return RedirectResponse(url=f"/manage/{kind}", status_code=303)
 
 
 @app.post("/manage/{kind}/{item_id}/delete")
@@ -193,11 +287,25 @@ async def status_page(
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
 
-    feed_rows = session.exec(select(Feed).where(Feed.timestamp_utc >= cutoff)).all()
+    feed_rows = session.exec(select(Feed).where(Feed.timestamp_utc >= cutoff).order_by(Feed.timestamp_utc)).all()
     feed_count = len(feed_rows)
     total_oz = sum((row.amount_oz for row in feed_rows), 0.0)
     total_ml = sum((row.amount_ml for row in feed_rows), 0.0)
     avg_oz = (total_oz / feed_count) if feed_count > 0 else 0.0
+    
+    # Calculate average time between feeds
+    avg_time_between_feeds_hours = None
+    if feed_count > 1:
+        timestamps = [
+            row.timestamp_utc if getattr(row.timestamp_utc, "tzinfo", None) is not None
+            else row.timestamp_utc.replace(tzinfo=timezone.utc)
+            for row in feed_rows
+        ]
+        time_diffs = [
+            (timestamps[i+1] - timestamps[i]).total_seconds() / 3600.0
+            for i in range(len(timestamps) - 1)
+        ]
+        avg_time_between_feeds_hours = sum(time_diffs) / len(time_diffs) if time_diffs else None
 
     from backend.targets import targets_for_now
 
@@ -264,6 +372,7 @@ async def status_page(
             "total_oz": total_oz,
             "total_ml": total_ml,
             "avg_oz": avg_oz,
+            "avg_time_between_hours": avg_time_between_feeds_hours,
             "color": feed_color(),
         },
         "pees": {
@@ -309,7 +418,6 @@ async def modal_poop(request: Request) -> HTMLResponse:
 async def pumping_page(request: Request) -> HTMLResponse:
     context: Dict[str, Any] = {
         "request": request,
-        "now_iso": datetime.now(timezone.utc).isoformat(),
         "target_seconds": 15 * 60,
     }
     return templates.TemplateResponse("pumping.html", context)

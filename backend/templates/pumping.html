@@ -4,7 +4,7 @@
   <h1>Pumping</h1>
 
   <form id="pumping-form" action="/api/pumping_sessions" method="post">
-    <input type="hidden" name="timestamp_utc" id="timestamp_utc" value="{{ now_iso }}" />
+    <input type="hidden" name="timestamp_utc" id="timestamp_utc" value="" />
     <input type="hidden" name="duration_seconds" id="duration_seconds" value="0" />
     <input type="hidden" name="extra_seconds" id="extra_seconds" value="0" />
 
@@ -91,7 +91,6 @@
         startBtn.disabled = true;
         pauseBtn.disabled = false;
         pauseBtn.textContent = 'Pause';
-        tsInput.value = new Date().toISOString();
         tickId = window.setInterval(updateDisplay, 1000);
         updateDisplay();
       }
@@ -127,6 +126,8 @@
         var over = Math.max(0, elapsed - targetSeconds);
         durInput.value = String(elapsed);
         extraInput.value = String(over);
+        // Set timestamp to current time when form is submitted
+        tsInput.value = new Date().toISOString();
         if (tickId) { window.clearInterval(tickId); tickId = null; }
       });
 

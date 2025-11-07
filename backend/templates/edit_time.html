@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Edit {{ kind_title }} Time</h1>
+
+  <div class="card">
+    <p style="font-size:14px; margin-bottom:16px;">
+      Current: <span id="current-time-display"></span>
+      {% if entry_details %}
+        — {{ entry_details }}
+      {% endif %}
+    </p>
+    
+    <form method="post" action="/manage/{{ kind }}/{{ item_id }}/update" onsubmit="prepareSubmit(event)">
+      <label for="timestamp">New Timestamp</label>
+      <input type="datetime-local" id="timestamp" name="timestamp_local_display" step="60" required />
+      <input type="hidden" id="timestamp_utc" name="timestamp_utc" value="" />
+      
+      <div class="spacer"></div>
+      
+      <div class="row">
+        <button type="submit" class="button button-primary">Update Time</button>
+        <a href="/manage/{{ kind }}" class="button">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="spacer"></div>
+  <a class="button" href="/manage/{{ kind }}">← Back</a>
+
+  <script>
+    (function() {
+      var utcIso = '{{ timestamp_utc_iso }}';
+      var date = new Date(utcIso);
+      
+      // Display current time in local format
+      var displayEl = document.getElementById('current-time-display');
+      var year = date.getFullYear();
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      var hours = String(date.getHours()).padStart(2, '0');
+      var minutes = String(date.getMinutes()).padStart(2, '0');
+      displayEl.textContent = year + '-' + month + '-' + day + ' ' + hours + ':' + minutes;
+      
+      // Set datetime-local input value (in local time)
+      var inputEl = document.getElementById('timestamp');
+      var localIso = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      inputEl.value = localIso;
+    })();
+    
+    function prepareSubmit(e) {
+      var dt = document.getElementById('timestamp').value;
+      if (!dt) {
+        e.preventDefault();
+        return;
+      }
+      // Parse datetime-local value explicitly as local time and convert to UTC
+      var parts = dt.split('T');
+      var dateParts = parts[0].split('-');
+      var timeParts = parts[1].split(':');
+      var local = new Date(
+        parseInt(dateParts[0]), 
+        parseInt(dateParts[1]) - 1, 
+        parseInt(dateParts[2]),
+        parseInt(timeParts[0]), 
+        parseInt(timeParts[1])
+      );
+      document.getElementById('timestamp_utc').value = local.toISOString();
+    }
+  </script>
+{% endblock %}
+

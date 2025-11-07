@@ -14,6 +14,15 @@
         <span class="muted">N/A</span>
       {% endif %}
     </p>
+    <p>Average time between feeds: 
+      {% if feeds.avg_time_between_hours is not none %}
+        {% set hours = feeds.avg_time_between_hours|int %}
+        {% set minutes = ((feeds.avg_time_between_hours - hours) * 60)|int %}
+        <strong>{{ hours }}h {{ minutes }}m</strong>
+      {% else %}
+        <span class="muted">N/A</span>
+      {% endif %}
+    </p>
     <p>Target range (24h): 
       {% if targets.oz is none %}
         <span class="muted">N/A before Day 1</span>
